@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Polish Vocabulary Matching Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .game-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .column {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .word-card {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: center;
+            font-size: 18px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            min-height: 25px;
+        }
+        .word-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .word-card.selected {
+            background-color: #e3f2fd;
+            border: 2px solid #2196f3;
+        }
+        .word-card.matched {
+            background-color: #e8f5e9;
+            border: 2px solid #4caf50;
+            animation: flashGreen 1s;
+        }
+        @keyframes flashGreen {
+            0% { background-color: #4caf50; }
+            100% { background-color: #e8f5e9; }
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        button {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #3367d6;
+        }
+        .score-container {
+            text-align: center;
+            margin: 20px 0;
+            font-size: 18px;
+        }
+        .instructions {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .add-vocab-form {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .add-vocab-form input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .add-vocab-button {
+            background-color: #ff9800;
+        }
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #4caf50;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            background-color: #e0e0e0;
+            height: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .progress {
+            height: 100%;
+            background-color: #4caf50;
+            border-radius: 5px;
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+    </style>
+</head>
+<body>
+    <h1>Polish Vocabulary Matching Game</h1>
+    
+    <div class="instructions">
+        <p><strong>Instructions:</strong> Click on one English word and one Polish word to match them. 
+           Matched words will be replaced with new words. When you make a correct match, 
+           you'll hear the Polish pronunciation.</p>
+    </div>
+    
+    <div class="progress-bar">
+        <div id="progress" class="progress"></div>
+    </div>
+    
+    <div class="score-container">
+        <span>Pairs matched: <span id="score">0</span></span>
+        <span> | Words remaining: <span id="remaining">0</span></span>
+    </div>
+    
+    <div class="game-container">
+        <div class="column" id="english-column">
+            <h2>English</h2>
+            <!-- English words will be added here -->
+        </div>
+        <div class="column" id="polish-column">
+            <h2>Polish</h2>
+            <!-- Polish words will be added here -->
+        </div>
+    </div>
+    
+    <div class="controls">
+        <button id="new-game">New Game</button>
+    </div>
+    
+    <div class="add-vocab-form">
+        <input type="text" id="english-input" placeholder="English word">
+        <input type="text" id="polish-input" placeholder="Polish word">
+        <button id="add-vocab" class="add-vocab-button">Add to Vocabulary</button>
+    </div>
+
+    <div id="notification" class="notification">Word added successfully!</div>
+
+    <script>
+        // Vocabulary data
+        const vocabulary = [
+            {english: "hello", polish: "cześć"},
+            {english: "thank you", polish: "dziękuję"},
+            {english: "goodbye", polish: "do widzenia"},
+            {english: "please", polish: "proszę"},
+            {english: "yes", polish: "tak"},
+            {english: "no", polish: "nie"},
+            {english: "water", polish: "woda"},
+            {english: "food", polish: "jedzenie"},
+            {english: "friend", polish: "przyjaciel"},
+            {english: "good", polish: "dobry"},
+            {english: "cat", polish: "kot"},
+            {english: "dog", polish: "pies"},
+            {english: "book", polish: "książka"},
+            {english: "house", polish: "dom"},
+            {english: "car", polish: "samochód"},
+            {english: "school", polish: "szkoła"},
+            {english: "teacher", polish: "nauczyciel"},
+            {english: "student", polish: "uczeń"},
+            {english: "computer", polish: "komputer"},
+            {english: "phone", polish: "telefon"}
+        ];
+        
+        let currentWords = [];      // Words currently in the game
+        let pendingWords = [];      // Words waiting to be added
+        let selectedCards = [];     // Cards currently selected by the player
+        let matchedPairs = 0;       // Number of pairs matched in this game
+        const gridSize = 5;         // Fixed grid size (5x5)
+        
+        // Initialize the game
+        function initGame() {
+            const englishColumn = document.getElementById('english-column');
+            const polishColumn = document.getElementById('polish-column');
+            
+            // Clear previous game
+            englishColumn.innerHTML = '<h2>English</h2>';
+            polishColumn.innerHTML = '<h2>Polish</h2>';
+            selectedCards = [];
+            matchedPairs = 0;
+            
+            // Reset counters
+            document.getElementById('score').textContent = '0';
+            
+            // Shuffle all vocabulary
+            const shuffled = [...vocabulary].sort(() => Math.random() - 0.5);
+            
+            // Start with 5 word pairs for the fixed grid
+            currentWords = shuffled.slice(0, gridSize);
+            pendingWords = shuffled.slice(gridSize);
+            
+            // Update remaining count
+            document.getElementById('remaining').textContent = pendingWords.length;
+            updateProgressBar();
+            
+            // Create the fixed grid with initial words
+            createFixedGrid();
+        }
+        
+        // Create a fixed grid layout
+        function createFixedGrid() {
+            const englishColumn = document.getElementById('english-column');
+            const polishColumn = document.getElementById('polish-column');
+            
+            // Clear previous content except the header
+            while (englishColumn.childNodes.length > 1) {
+                englishColumn.removeChild(englishColumn.lastChild);
+            }
+            
+            while (polishColumn.childNodes.length > 1) {
+                polishColumn.removeChild(polishColumn.lastChild);
+            }
+            
+            // Create English cards in random order
+            const shuffledEnglish = [...currentWords].sort(() => Math.random() - 0.5);
+            for (let i = 0; i < gridSize; i++) {
+                const card = createCard(shuffledEnglish[i].english, 'english');
+                englishColumn.appendChild(card);
+            }
+            
+            // Create Polish cards in random order
+            const shuffledPolish = [...currentWords].sort(() => Math.random() - 0.5);
+            for (let i = 0; i < gridSize; i++) {
+                const card = createCard(shuffledPolish[i].polish, 'polish');
+                polishColumn.appendChild(card);
+            }
+        }
+        
+        // Create a word card
+        function createCard(text, language) {
+            const card = document.createElement('div');
+            card.className = 'word-card';
+            card.textContent = text;
+            card.dataset.text = text;
+            card.dataset.language = language;
+            
+            card.addEventListener('click', () => {
+                // Ignore if card is already selected
+                if (card.classList.contains('selected')) {
+                    return;
+                }
+                
+                // Select card
+                card.classList.add('selected');
+                selectedCards.push(card);
+                
+                // If we have two selected cards, check for match
+                if (selectedCards.length === 2) {
+                    const card1 = selectedCards[0];
+                    const card2 = selectedCards[1];
+                    
+                    // Check if we have one English and one Polish card
+                    if (card1.dataset.language !== card2.dataset.language) {
+                        // Find if they match
+                        const match = currentWords.find(word => 
+                            (card1.dataset.language === 'english' && card2.dataset.language === 'polish' && 
+                             word.english === card1.dataset.text && word.polish === card2.dataset.text) ||
+                            (card1.dataset.language === 'polish' && card2.dataset.language === 'english' && 
+                             word.polish === card1.dataset.text && word.english === card2.dataset.text)
+                        );
+                        
+                        if (match) {
+                            // Mark cards as matched
+                            card1.classList.add('matched');
+                            card2.classList.add('matched');
+                            
+                            // Get the Polish word for pronunciation
+                            const polishWord = card1.dataset.language === 'polish' ? 
+                                card1.dataset.text : card2.dataset.text;
+                                
+                            // Automatically play pronunciation
+                            pronounceWord(polishWord);
+                            
+                            // Remove the matched pair from currentWords
+                            currentWords = currentWords.filter(word => 
+                                word.english !== match.english && word.polish !== match.polish
+                            );
+                            
+                            // Replace with a new pair if available
+                            if (pendingWords.length > 0) {
+                                const newPair = pendingWords.shift();
+                                currentWords.push(newPair);
+                                
+                                // Update remaining count
+                                document.getElementById('remaining').textContent = pendingWords.length;
+                                updateProgressBar();
+                                
+                                // Update matched counter
+                                matchedPairs++;
+                                document.getElementById('score').textContent = matchedPairs;
+                                
+                                // Replace matched cards with new words after a delay
+                                setTimeout(() => {
+                                    if (card1.dataset.language === 'english') {
+                                        card1.textContent = newPair.english;
+                                        card1.dataset.text = newPair.english;
+                                        card2.textContent = newPair.polish;
+                                        card2.dataset.text = newPair.polish;
+                                    } else {
+                                        card1.textContent = newPair.polish;
+                                        card1.dataset.text = newPair.polish;
+                                        card2.textContent = newPair.english;
+                                        card2.dataset.text = newPair.english;
+                                    }
+                                    
+                                    // Reset card states
+                                    card1.classList.remove('selected', 'matched');
+                                    card2.classList.remove('selected', 'matched');
+                                }, 1000);
+                            } else {
+                                // No more words to add - hide the matched cards
+                                matchedPairs++;
+                                document.getElementById('score').textContent = matchedPairs;
+                                
+                                // Hide matched cards after a delay
+                                setTimeout(() => {
+                                    card1.style.visibility = 'hidden';
+                                    card2.style.visibility = 'hidden';
+                                    
+                                    // Check if game complete
+                                    if (currentWords.length === 0) {
+                                        setTimeout(() => {
+                                            alert('Congratulations! You have mastered all the vocabulary!');
+                                        }, 500);
+                                    }
+                                }, 1000);
+                            }
+                        } else {
+                            // No match, deselect after a short delay
+                            setTimeout(() => {
+                                card1.classList.remove('selected');
+                                card2.classList.remove('selected');
+                            }, 1000);
+                        }
+                    } else {
+                        // Two cards of same language, deselect after a short delay
+                        setTimeout(() => {
+                            card1.classList.remove('selected');
+                            card2.classList.remove('selected');
+                        }, 1000);
+                    }
+                    
+                    // Clear selected cards
+                    setTimeout(() => {
+                        selectedCards = [];
+                    }, 1000);
+                }
+            });
+            
+            return card;
+        }
+        
+        // Update the progress bar
+        function updateProgressBar() {
+            const totalWords = vocabulary.length;
+            const learnedWords = matchedPairs;
+            const progress = (learnedWords / totalWords) * 100;
+            document.getElementById('progress').style.width = `${progress}%`;
+        }
+        
+        // Pronounce a Polish word using browser speech synthesis
+        function pronounceWord(word) {
+            const utterance = new SpeechSynthesisUtterance(word);
+            utterance.lang = 'pl-PL';
+            speechSynthesis.speak(utterance);
+        }
+        
+        // Show notification
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.style.display = 'block';
+            
+            // Hide notification after 3 seconds
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+        
+        // Add new vocabulary
+        function addVocabulary() {
+            const englishInput = document.getElementById('english-input');
+            const polishInput = document.getElementById('polish-input');
+            
+            const english = englishInput.value.trim();
+            const polish = polishInput.value.trim();
+            
+            if (english && polish) {
+                // Check if word already exists
+                const exists = vocabulary.some(word => 
+                    word.english.toLowerCase() === english.toLowerCase() || 
+                    word.polish.toLowerCase() === polish.toLowerCase()
+                );
+                
+                if (exists) {
+                    alert('This word pair already exists in the vocabulary!');
+                } else {
+                    const newPair = {english, polish};
+                    vocabulary.push(newPair);
+                    pendingWords.push(newPair);
+                    englishInput.value = '';
+                    polishInput.value = '';
+                    
+                    document.getElementById('remaining').textContent = pendingWords.length;
+                    updateProgressBar();
+                    
+                    showNotification(`Added new word pair: ${english} - ${polish}`);
+                }
+            } else {
+                alert('Please enter both English and Polish words');
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('new-game').addEventListener('click', initGame);
+        document.getElementById('add-vocab').addEventListener('click', addVocabulary);
+        
+        // Start the game when page loads
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
